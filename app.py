@@ -5,7 +5,7 @@ from datetime import datetime
 # CONFIG
 st.set_page_config(page_title="Elite Analyst Pro", layout="centered")
 
-# 🔐 API KEY (Streamlit secrets)
+# API KEY
 API_KEY = st.secrets["API_KEY"]
 HEADERS = {
     'x-rapidapi-key': API_KEY,
@@ -14,32 +14,25 @@ HEADERS = {
 
 st.title("💎 ELITE ANALYST PRO")
 
-# --- 1. CHOIX COMPÉTITION ---
+# --- 1. COMPÉTITION ---
 st.subheader("1️⃣ Choisir la Compétition")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    zone = st.selectbox("🌍 ZONE / PAYS", [
-        "France", "Angleterre", "Espagne", "Allemagne", "Italie",
-        "Portugal", "Pays-Bas", "Turquie", "Afrique", "Amérique", "International"
+    zone = st.selectbox("🌍 ZONE", [
+        "France", "Angleterre", "Espagne", "Allemagne", "Italie"
     ])
 
 with col2:
-    date_match = st.date_input("📅 DATE DU MATCH", datetime.now())
+    date_match = st.date_input("📅 DATE", datetime.now())
 
 compets = {
-    "France": {"Ligue 1": 61, "Ligue 2": 62},
-    "Angleterre": {"Premier League": 39, "Championship": 40},
+    "France": {"Ligue 1": 61},
+    "Angleterre": {"Premier League": 39},
     "Espagne": {"LaLiga": 140},
     "Allemagne": {"Bundesliga": 78},
-    "Italie": {"Serie A": 135},
-    "Portugal": {"Primeira Liga": 94},
-    "Pays-Bas": {"Eredivisie": 88},
-    "Turquie": {"Süper Lig": 203},
-    "Afrique": {"CAN": 1},
-    "Amérique": {"Copa America": 9},
-    "International": {"Coupe du Monde": 1}
+    "Italie": {"Serie A": 135}
 }
 
 tournoi = st.selectbox("🏆 TOURNOI", list(compets[zone].keys()))
@@ -51,14 +44,17 @@ st.subheader("2️⃣ Sélectionner le Match")
 id_ligue = compets[zone][tournoi]
 date_str = date_match.strftime('%Y-%m-%d')
 
-url = f"https://v3.football.api-sports.io/fixtures?league={id_ligue}&season=2025&date={date_str}"
+# 🔥 SAISON AUTO
+season = date_match.year
+
+url = f"https://v3.football.api-sports.io/fixtures?league={id_ligue}&season={season}&date={date_str}"
 
 try:
     res = requests.get(url, headers=HEADERS).json()
     matchs = res.get('response', [])
 
     if not matchs:
-        st.info("Aucun match trouvé à cette date.")
+        st.warning("⚠️ Aucun match trouvé pour cette date")
     else:
         options = {
             f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}": m
@@ -70,12 +66,35 @@ try:
 
         if st.button("🔍 ANALYSER", use_container_width=True):
 
-            fixture_id = data_m['fixture']['id']
+            statut = data_m['fixture']['status']['short']
 
-            # --- STATS MATCH ---
+            st.subheader("📌 Statut du match")
+            st.write(data_m['fixture']['status']['long'])
+
+            # 🔥 SI MATCH PAS COMMENCÉ
+            if statut not in ["FT", "1H", "2H"]:
+                st.warning("⏳ Match pas encore joué → analyse limitée")
+
+                st.subheader("💰 Conseil Pré-Match")
+
+                st.info("👉 Double chance ou Under 3.5 conseillé (match incertain)")
+
+                st.subheader("🎯 Combiné")
+                st.write("🔒 Double chance")
+                st.write("🔒 Under 3.5 buts")
+
+                st.stop()
+
+            # --- STATS ---
+            fixture_id = data_m['fixture']['id']
             stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fixture_id}"
+
             stats_res = requests.get(stats_url, headers=HEADERS).json()
             stats = stats_res.get('response', [])
+
+            if not stats or len(stats) < 2:
+                st.warning("⚠️ Pas de statistiques disponibles")
+                st.stop()
 
             def get_stat(team_stats, stat_name):
                 for s in team_stats:
@@ -83,89 +102,76 @@ try:
                         return s['value']
                 return 0
 
-            if len(stats) == 2:
-                home = stats[0]['statistics']
-                away = stats[1]['statistics']
+            home = stats[0]['statistics']
+            away = stats[1]['statistics']
 
-                shots_home = get_stat(home, "Total Shots") or 0
-                shots_away = get_stat(away, "Total Shots") or 0
+            shots_home = get_stat(home, "Total Shots") or 0
+            shots_away = get_stat(away, "Total Shots") or 0
 
-                poss_home = get_stat(home, "Ball Possession") or "0%"
-                poss_away = get_stat(away, "Ball Possession") or "0%"
+            poss_home = get_stat(home, "Ball Possession") or "0%"
+            poss_away = get_stat(away, "Ball Possession") or "0%"
 
-                st.subheader("📊 Statistiques Réelles")
+            # --- AFFICHAGE ---
+            st.subheader("📊 Statistiques")
 
-                c1, c2 = st.columns(2)
-                c1.metric("Tirs domicile", shots_home)
-                c2.metric("Tirs extérieur", shots_away)
+            c1, c2 = st.columns(2)
+            c1.metric("Tirs domicile", shots_home)
+            c2.metric("Tirs extérieur", shots_away)
 
-                c3, c4 = st.columns(2)
-                c3.metric("Possession domicile", poss_home)
-                c4.metric("Possession extérieur", poss_away)
+            c3, c4 = st.columns(2)
+            c3.metric("Possession domicile", poss_home)
+            c4.metric("Possession extérieur", poss_away)
 
-                # --- ANALYSE IA ---
-                st.subheader("🧠 Analyse IA")
+            # --- ANALYSE ---
+            st.subheader("🧠 Analyse IA")
 
-                if shots_home > shots_away:
-                    prediction = "🏠 Avantage domicile"
-                elif shots_away > shots_home:
-                    prediction = "🚀 Avantage extérieur"
-                else:
-                    prediction = "⚖️ Match équilibré"
-
-                st.success(prediction)
-
-                # --- CONSEIL PARI ---
-                st.subheader("💰 Conseil Pari")
-
-                if shots_home > 10 and shots_away > 10:
-                    bet = "🔥 Over 2.5 buts"
-                elif shots_home > shots_away:
-                    bet = "✅ Victoire domicile"
-                else:
-                    bet = "⚠️ Double chance extérieur"
-
-                st.info(bet)
-
-                # --- COMBINÉ INTELLIGENT ---
-                st.subheader("🎯 Suggestions pour Combiné")
-
-                picks = []
-
-                if shots_home > shots_away:
-                    picks.append(f"{choix} → Victoire Domicile")
-
-                if shots_away > shots_home:
-                    picks.append(f"{choix} → Victoire Extérieur")
-
-                if shots_home > 8 and shots_away > 8:
-                    picks.append(f"{choix} → Over 2.5 buts")
-
-                if shots_home > 10 and shots_away > 5:
-                    picks.append(f"{choix} → Les deux équipes marquent")
-
-                if abs(shots_home - shots_away) <= 3:
-                    picks.append(f"{choix} → Match serré (Double chance)")
-
-                if picks:
-                    for p in picks:
-                        st.write("✅", p)
-                else:
-                    st.write("⚠️ Aucun pick fiable")
-
-                # --- COMBINÉ SAFE ---
-                st.subheader("🛡️ Combiné Sécurisé")
-
-                safe_picks = [p for p in picks if "Double chance" in p or "Over" in p]
-
-                if safe_picks:
-                    for sp in safe_picks:
-                        st.write("🔒", sp)
-                else:
-                    st.write("⚠️ Pas de combiné safe dispo")
-
+            if shots_home > shots_away:
+                st.success("🏠 Avantage domicile")
+            elif shots_away > shots_home:
+                st.success("🚀 Avantage extérieur")
             else:
-                st.warning("Pas assez de stats disponibles.")
+                st.success("⚖️ Match équilibré")
 
-except:
-    st.error("⚠️ Erreur API. Vérifie ta clé.")
+            # --- CONSEIL ---
+            st.subheader("💰 Conseil")
+
+            if shots_home > 10 and shots_away > 10:
+                st.info("🔥 Over 2.5 buts")
+            elif shots_home > shots_away:
+                st.info("✅ Victoire domicile")
+            else:
+                st.info("⚠️ Double chance extérieur")
+
+            # --- COMBINÉ ---
+            st.subheader("🎯 Combiné")
+
+            picks = []
+
+            if shots_home > shots_away:
+                picks.append("Victoire domicile")
+
+            if shots_away > shots_home:
+                picks.append("Victoire extérieur")
+
+            if shots_home > 8 and shots_away > 8:
+                picks.append("Over 2.5 buts")
+
+            if abs(shots_home - shots_away) <= 3:
+                picks.append("Double chance")
+
+            for p in picks:
+                st.write("✅", p)
+
+            # --- SAFE ---
+            st.subheader("🛡️ Combiné sécurisé")
+
+            safe = [p for p in picks if "Double chance" in p or "Over" in p]
+
+            if safe:
+                for s in safe:
+                    st.write("🔒", s)
+            else:
+                st.write("⚠️ Aucun combiné safe")
+
+except Exception as e:
+    st.error("⚠️ Erreur API ou connexion")
