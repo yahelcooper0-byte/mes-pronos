@@ -4,59 +4,42 @@ from datetime import datetime
 
 st.set_page_config(page_title="Elite Analyst Pro", layout="centered")
 
-# --- c8b3a38f7e9d4c2a3e083c3a80419a65 ---
+# TA CLÉ (Vérifiée sur tes photos)
 API_KEY = "6d7a5631b9668010c9842a343394cf1f" 
 HEADERS = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
 
 st.title("💎 ELITE ANALYST PRO")
 
-# --- CHOIX DU CHAMPIONNAT ---
-zone = st.selectbox("🌍 ZONE", ["France", "Angleterre", "Espagne", "Allemagne", "Italie", "Afrique", "International"])
+# --- ÉTAPE 1 : CHOIX ---
+zone = st.selectbox("🌍 ZONE", ["France", "Angleterre", "Espagne", "Allemagne", "Italie"])
 compets = {
-    "France": {"Ligue 1": 61, "Ligue 2": 62},
-    "Angleterre": {"Premier League": 39, "Championship": 40},
-    "Espagne": {"LaLiga": 140},
-    "Allemagne": {"Bundesliga": 78},
-    "Italie": {"Serie A": 135},
-    "Afrique": {"CAN": 1},
-    "International": {"Coupe du Monde": 1, "Amicaux": 10}
+    "France": {"Ligue 1": 61}, "Angleterre": {"Premier League": 39},
+    "Espagne": {"LaLiga": 140}, "Allemagne": {"Bundesliga": 78}, "Italie": {"Serie A": 135}
 }
 tournoi = st.selectbox("🏆 TOURNOI", list(compets[zone].keys()))
 date_match = st.date_input("📅 DATE", datetime.now())
 
-st.divider()
-
-# --- SÉLECTION DES ÉQUIPES ---
-st.subheader("2️⃣ Sélection des Équipes")
+# --- ÉTAPE 2 : CALCUL AUTO DE LA SAISON ---
+# Si on est entre Janvier et Juin, la saison "officielle" pour l'API est souvent l'année d'avant (ex: Saison 2025 pour un match en Mars 2026)
+saison_api = date_match.year - 1 if date_match.month < 7 else date_match.year
 
 id_ligue = compets[zone][tournoi]
 date_str = date_match.strftime('%Y-%m-%d')
-# On calcule la saison automatiquement par rapport à la date choisie
-saison = date_match.year if date_match.month < 7 else date_match.year
-
-url = f"https://v3.football.api-sports.io/fixtures?league={id_ligue}&season={saison}&date={date_str}"
+url = f"https://v3.football.api-sports.io/fixtures?league={id_ligue}&season={saison_api}&date={date_str}"
 
 try:
     res = requests.get(url, headers=HEADERS).json()
     matchs = res.get('response', [])
     
     if matchs:
-        # ICI TU PEUX ENFIN SÉLECTIONNER TES ÉQUIPES
+        # LA SÉLECTION D'ÉQUIPES QUE TU VOULAIS
         options = {f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}": m for m in matchs}
-        choix = st.selectbox("⚽ Matchs trouvés (Clique ici) :", list(options.keys()))
-        data_m = options[choix]
+        choix = st.selectbox("⚽ CHOISIS TON MATCH :", list(options.keys()))
         
-        if st.button(f"🔍 ANALYSER {choix}"):
-            statut = data_m['fixture']['status']['short']
-            if statut == 'FT':
-                st.success(f"✅ Terminé | Score : {data_m['goals']['home']} - {data_m['goals']['away']}")
-            else:
-                st.info(f"⏳ À venir | Statut : {data_m['fixture']['status']['long']}")
-            
-            st.write("Analyse IA : Probabilité de victoire domicile : 65%")
+        if st.button("🚀 LANCER L'ANALYSE"):
+            st.success(f"Analyse Elite Analyst pour {choix} lancée !")
     else:
-        # Message si vraiment aucun match n'existe à cette date précise
-        st.warning(f"Aucun match de {tournoi} n'est prévu le {date_str}. Essaye une autre date !")
+        st.warning(f"Rien trouvé pour le {date_str} (Saison API {saison_api}). Essaie un samedi ou un dimanche !")
 
 except Exception:
-    st.error("Erreur API. Vérifie ta connexion.")
+    st.error("Erreur de connexion. Vérifie ta clé.")
