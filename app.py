@@ -6,7 +6,7 @@ from datetime import datetime
 st.set_page_config(page_title="Elite Analyst Pro", layout="centered")
 
 # 🔐 API KEY (Streamlit secrets)
-API_KEY = st.secrets["API_KEY"]
+API_KEY = st.secrets["6d7a5631b9668010c9842a343394cf1f"]
 HEADERS = {
     'x-rapidapi-key': API_KEY,
     'x-rapidapi-host': 'v3.football.api-sports.io'
